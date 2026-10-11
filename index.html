@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="theme-color" content="#14214f"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Insumos</title>
+<style>
+:root{--bg:#f3f5fa;--card:#fff;--tx:#14214f;--mu:#5d6a8f;--bd:#dde3f1;--hd:#14214f;--ac:#ff8c28;--bad:#d03a3a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e1430;--card:#18214d;--tx:#eef1ff;--mu:#9aa6d1;--bd:#2b3568;--bad:#ff6b6b}}
+:root[data-theme=dark]{--bg:#0e1430;--card:#18214d;--tx:#eef1ff;--mu:#9aa6d1;--bd:#2b3568;--bad:#ff6b6b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;background:var(--hd);color:#fff;font-size:14px}
+nav{display:flex;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--bd)}
+nav button{flex:1;background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:12px 10px;color:var(--mu);white-space:nowrap}
+nav .on{color:var(--tx);border-bottom-color:var(--ac)}
+main{padding:12px;max-width:640px;margin:0 auto}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin:0 0 10px}
+.r{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.m{color:var(--mu);font-size:13px}.n{font-size:28px;font-weight:700}.w{color:var(--bad);font-size:13px;font-weight:600}
+.b{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+input,select,button{font:inherit;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx)}
+input,select{width:100%;margin:4px 0 8px}
+button,.btn{background:var(--ac);color:#14214f;border:0;font-weight:600;cursor:pointer}
+.btn{display:inline-block;padding:10px;border-radius:10px;text-decoration:none}
+button.x{background:none;color:var(--bad);border:1px solid var(--bad)}
+:focus-visible{outline:3px solid var(--ac);outline-offset:1px}
+label{font-size:13px;color:var(--mu)}h2,h3{margin:0 0 8px}
+.ck{display:flex;gap:8px;align-items:center;font-size:15px;color:var(--tx);margin:4px 0}.ck input{width:auto;margin:0}
+.low{border-color:var(--bad)}.top{border-color:var(--ac);background:rgba(255,140,40,.16)}.pos{font-weight:700;font-size:20px;min-width:34px}
+.ov{position:fixed;inset:0;background:rgba(10,15,40,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9;overflow:auto}.dg{width:100%;max-width:420px;margin:0}
+</style></head><body><div id="app"><main><p class="m">Carregando...</p></main></div><div id="md"></div>
+<script>
+const LINK=location.href.split('#')[0].split('?')[0];
+let DB,USR,ME={},own=false,canW=null,ready=false,rl=false,items=[],collabs=[],moves=[],packs={},roles={},reqs=[],names={},tab='estoque',rkM='',rkS='u',rkI='',tk=0,st={},chats=[],msgs=[],seenMap={},SD=null,sw=0,curChat='geral',msgUn=null,OWN='';
+const $=i=>document.getElementById(i),e=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=t=>new Date(t).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});
+const mo=t=>{const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const R=h=>{$('app').innerHTML=h};
+function dlg(h){$('md').innerHTML=h?`<div class="ov"><div class="c dg">${h}</div></div>`:''}
+function note(m){dlg(`<p>${e(m)}</p><div class="b"><button onclick="dlg()">OK</button></div>`)}
+function sure(m,cb){dlg(`<p>${e(m)}</p><div class="b"><button id="ok">Sim</button><button class="x" onclick="dlg()">Não</button></div>`);$('ok').onclick=()=>{dlg();cb()}}
+function ask(t,f,cb){dlg(`<h3>${e(t)}</h3>${f.map(x=>`<label>${e(x.l)}</label><input id="f_${x.id}" type="${x.t||'text'}" inputmode="${x.t=='number'?'decimal':'text'}" value="${e(x.v==null?'':x.v)}">`).join('')}<div class="b"><button id="ok">Confirmar</button><button class="x" onclick="dlg()">Cancelar</button></div>`);$('ok').onclick=()=>{const v={};f.forEach(x=>v[x.id]=$('f_'+x.id).value);dlg();cb(v)}}
+const ERR={'permission-denied':'Sem permissão para esta ação.','auth/invalid-credential':'E-mail ou senha incorretos.','auth/wrong-password':'Senha incorreta.','auth/email-already-in-use':'Este e-mail já tem conta.','auth/weak-password':'Senha fraca (mínimo 6 caracteres).','auth/invalid-email':'E-mail inválido.','auth/too-many-requests':'Muitas tentativas. Aguarde um pouco.','auth/network-request-failed':'Sem conexão.',invalid_argument:'Sem permissão para esta ação. Fale com o administrador.',quota_exceeded:'Limite de armazenamento atingido.',resource_exhausted:'Muitas ações seguidas. Aguarde um instante.',unavailable:'Falha temporária. Tente de novo.',revoked:'Seu acesso mudou. Reabra a página.'};
+const T=async f=>{try{await f()}catch(x){note(ERR[x&&x.code]||'Não foi possível concluir.')}};
+const arr=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+const my=()=>roles[ME.id];
+const can=p=>own||!!my()&&my().status=='active'&&(my().role=='geral'||(my().role=='parcial'&&!!(my().perms||{})[p])||(my().role=='simples'&&p=='ret'));
+const nm=id=>(people[id]&&people[id].name)||(roles[id]&&roles[id].label)||(id==ME.id?(ME.name||'Você'):id==OWN?'Administrador':'Usuário');
+const PL=[['est','Ver estoque'],['ret','Registrar retirada'],['mov','Dar entrada e saída'],['ins','Cadastrar e editar insumos'],['his','Ver histórico'],['cor','Corrigir histórico'],['exc','Excluir (itens e histórico)'],['ran','Ver ranking e pacotes'],['eq','Gerenciar colaboradores']];
+const TABS=[['estoque','Estoque',()=>can('est')],['retirar','Retirar',()=>can('ret')],['hist','Histórico',()=>can('his')],['rank','Ranking',()=>can('ran')],['graf','Gráficos',()=>can('ran')||can('his')],['avisos','Avisos',()=>1],['chat','Chat',()=>1],['equipe','Equipe',()=>own||can('eq')],['conta','Conta',()=>1]];
+const stockOf=()=>{const s={};items.forEach(i=>s[i.id]=i.stock||0);return s};
+const optI=a=>a.map(i=>`<option value="${i.id}">${e(i.name)}${i.unit?' ('+e(i.unit)+')':''}</option>`).join(''),optC=a=>a.map(c=>`<option value="${c.id}">${e(c.name)}</option>`).join('');
+
+const CFG={apiKey:"AIzaSyBDkufeiDIUSkfOnSOY_zO6RrAi8RMjPjA",authDomain:"controle-insumos-57f6f.firebaseapp.com",projectId:"controle-insumos-57f6f",storageBucket:"controle-insumos-57f6f.firebasestorage.app",messagingSenderId:"497465623206",appId:"1:497465623206:web:f42bdcb93ba975e616ea67"};
+const ADMIN="wandesilva6@gmail.com"; // minúsculas
+let F={},auth,fdb,cfg={},people={},geral={},pendName='',lastAct=Date.now(),un=[],started=false,sig='',ERRSUB='';
+const fsOn=(r,n,er)=>F.onSnapshot(r,n,er||(x=>console.warn(x)));
+function mkDB(){const mkD=r=>({set:d=>F.setDoc(r,d),update:d=>F.updateDoc(r,d),delete:()=>F.deleteDoc(r),get:()=>F.getDoc(r),onSnapshot:(n,er)=>fsOn(r,n,er)}),
+ mkQ=(c,cs)=>{const q=()=>cs.length?F.query(c,...cs):c;return{add:d=>F.addDoc(c,d),doc:id=>mkD(F.doc(c,id)),orderBy:(f,d)=>mkQ(c,[...cs,F.orderBy(f,d)]),limit:n=>mkQ(c,[...cs,F.limit(n)]),where:(f,o,v)=>mkQ(c,[...cs,F.where(f,o,v)]),get:()=>F.getDocs(q()),onSnapshot:(n,er)=>fsOn(q(),n,er)}};
+ DB={collection:p=>mkQ(F.collection(fdb,...p.split('/')),[]),doc:p=>mkD(F.doc(fdb,...p.split('/')))}}
+async function init(){
+ try{const B='https://www.gstatic.com/firebasejs/10.14.1/',[a,u,s]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-auth.js'),import(B+'firebase-firestore.js')]);F={...a,...u,...s};const ap=F.initializeApp(CFG);auth=F.getAuth(ap);fdb=F.getFirestore(ap);mkDB()}
+ catch(x){return R('<main><div class="c"><h2>Não foi possível carregar</h2><p>Confira a internet e a configuração do Firebase.</p></div></main>')}
+ F.onAuthStateChanged(auth,onUser)}
+async function onUser(u){un.forEach(f=>f());un=[];msgUn&&msgUn();msgUn=null;ready=false;started=false;rl=false;ME={};own=false;roles={};reqs=[];dlg();
+ if(!u)return authView();
+ try{await u.reload()}catch(_){}
+ if(!u.emailVerified)return verView();
+ own=u.email.toLowerCase()==ADMIN.toLowerCase();ME={id:u.uid,name:own?'Administrador':(pendName||u.email),email:u.email,isOwner:own};
+ try{
+  if(own){const c=DB.doc('config/app');if(!(await c.get()).exists())await c.set({allowSignups:true});await DB.doc('people/'+ME.id).set({name:'Administrador',status:'active',owner:true});rl=true;started=true;ready=true;startData();return draw(1)}
+  un.push(DB.doc('roles/'+ME.id).onSnapshot(s=>{roles=s.exists()?{[ME.id]:s.data()}:{};rl=true;gate()},x=>{rl=true;gate()}));
+  un.push(DB.doc('requests/'+ME.id).onSnapshot(s=>{reqs=s.exists()?[{id:ME.id,label:s.data().label||''}]:[];gate()},x=>{}))
+ }catch(x){note('Falha ao carregar ('+(x.code||x.message)+'). Confira a configuração e as regras.')}}
+function gate(){if(!rl)return;ready=true;const r=my();
+ if(r&&r.status=='active'){ME.name=r.label||ME.email;const g=JSON.stringify([r.role,r.perms]);if(!started){started=true;sig=g;startData()}else if(g!=sig)return location.reload()}
+ else if(started)return location.reload();
+ draw(1)}
+function startData(){const sub=(ref,fn)=>un.push(ref.onSnapshot(s=>{fn(s);draw()},x=>{ERRSUB=x.code;draw()}));
+ sub(DB.collection('items'),s=>{items=arr(s).sort((a,b)=>a.name.localeCompare(b.name))});
+ sub(DB.collection('collabs'),s=>{collabs=arr(s).sort((a,b)=>a.name.localeCompare(b.name))});
+ sub(DB.doc('config/app'),s=>{cfg=s.data()||{}});
+ sub(DB.collection('people'),s=>{people={};s.docs.forEach(d=>people[d.id]=d.data());OWN=(Object.entries(people).find(([k,v])=>v.owner)||[''])[0]});
+ if(own){sub(DB.collection('roles'),s=>{roles={};s.docs.forEach(d=>roles[d.id]=d.data())});sub(DB.collection('requests'),s=>{reqs=s.docs.map(d=>({id:d.id,label:d.data().label||''}))})}
+ if(can('his')||can('ran')){const t=new Date(),since=new Date(t.getFullYear(),t.getMonth()-3,1).getTime();sub(DB.collection('moves').where('ts','>=',since),s=>{moves=arr(s).sort((a,b)=>b.ts-a.ts)})}
+ if(can('ran'))sub(DB.collection('packs'),s=>{packs={};s.docs.forEach(d=>packs[d.id]=d.data().n)});
+ SD=DB.doc('data/users/'+ME.id+'/state');sub(SD,s=>{seenMap=(s.data()||{}).seen||{}});
+ sub(DB.collection('chats').where('members','array-contains',ME.id),s=>{chats=arr(s)});
+ sub(DB.doc('chats/geral'),s=>{geral=s.data()||{}});
+ tab=TABS.find(t=>t[2]())[0]}
+const sens=cb=>ask('Confirme sua senha',[{id:'p',l:'Senha',t:'password'}],v=>T(async()=>{await F.reauthenticateWithCredential(auth.currentUser,F.EmailAuthProvider.credential(auth.currentUser.email,v.p));cb()}));
+function authView(m){m=m||'in';const i=m=='in';R(`<main><div class="c"><h2>${i?'Entrar':'Criar conta'}</h2>${i?'':'<input id="an" placeholder="Seu nome">'}<input id="ae" type="email" placeholder="E-mail" autocomplete="username"><input id="ap" type="password" placeholder="Senha (mínimo 6)" autocomplete="${i?'current-password':'new-password'}"><button onclick="${i?'login()':'signup()'}">${i?'Entrar':'Criar conta'}</button><div class="b"><button class="x" onclick="authView('${i?'up':'in'}')">${i?'Criar conta':'Já tenho conta'}</button>${i?'<button class="x" onclick="resetPw()">Esqueci minha senha</button>':''}</div></div></main>`)}
+const verView=()=>R(`<main><div class="c"><h2>Confirme seu e-mail</h2><p>Enviamos um link para <b>${e(ME.email||auth.currentUser.email)}</b>. Abra o e-mail, toque no link e volte aqui.</p><div class="b"><button onclick="verOk()">Já confirmei</button><button class="x" onclick="resendV()">Reenviar e-mail</button><button class="x" onclick="outU()">Sair</button></div></div></main>`);
+function login(){T(()=>F.signInWithEmailAndPassword(auth,$('ae').value.trim(),$('ap').value))}
+function signup(){T(async()=>{pendName=$('an').value.trim();if(!pendName)return note('Digite seu nome.');const c=await F.createUserWithEmailAndPassword(auth,$('ae').value.trim(),$('ap').value);await F.sendEmailVerification(c.user)})}
+function resetPw(){T(async()=>{const m=$('ae').value.trim();if(!m)return note('Digite seu e-mail no campo acima.');await F.sendPasswordResetEmail(auth,m);note('Se o e-mail tiver conta, enviamos o link para redefinir a senha.')})}
+function verOk(){T(async()=>{await auth.currentUser.reload();await auth.currentUser.getIdToken(true);location.reload()})}
+function resendV(){T(async()=>{await F.sendEmailVerification(auth.currentUser);note('E-mail reenviado.')})}
+function outU(){F.signOut(auth)}
+function chPw(){T(async()=>{const n=$('pn').value;if(n.length<6)return note('A nova senha precisa ter ao menos 6 caracteres.');await F.reauthenticateWithCredential(auth.currentUser,F.EmailAuthProvider.credential(auth.currentUser.email,$('pa').value));await F.updatePassword(auth.currentUser,n);$('pa').value=$('pn').value='';note('Senha trocada.')})}
+function tgl(){sens(()=>T(()=>DB.doc('config/app').update({allowSignups:!cfg.allowSignups})))}
+['click','keydown','touchstart'].forEach(v=>addEventListener(v,()=>lastAct=Date.now()));
+setInterval(()=>{if(auth&&auth.currentUser&&Date.now()-lastAct>15*60e3)F.signOut(auth)},30000);
+async function draw(f){if(!ready)return;if(!f&&/^(INPUT|SELECT)$/.test(document.activeElement&&document.activeElement.tagName))return;
+ const k=++tk;
+ if(k!=tk)return;
+ if(!rl)return R('<main><p class="m">Carregando...</p></main>');
+ if(!own&&(!my()||my().status!='active'))return pend();
+ const t=TABS.filter(x=>x[2]());if(!t.find(x=>x[0]==tab))tab=t[0][0];
+ R(`<header><b>Controle de Insumos</b><span>${e(ME.name||'')}${own?' · admin':''}</span></header><nav>${t.map(x=>`<button class="${x[0]==tab?'on':''}" onclick="tab='${x[0]}';draw(1);if(tab=='chat')openChat(curChat)">${x[1]}${bd(x[0])}</button>`).join('')}</nav><main>${ERRSUB?'<p class="w">Houve um problema ao carregar parte dos dados.</p>':''}${V[tab]()}</main>`)}
+function pend(){const mine=reqs.find(r=>r.id==ME.id);
+ R(`<main><div class="c"><h2>${my()&&my().status=='blocked'?'Acesso bloqueado':'Aguardando liberação'}</h2>${my()?'<p>Fale com o administrador.</p>':mine?'<p>Pedido enviado. Assim que o administrador liberar, o app abre sozinho.</p>':`<p>Informe seu nome e peça a liberação ao administrador.</p><input id="lb" placeholder="Seu nome" value="${e(ME.name||'')}"><button onclick="reqAcc()">Pedir liberação</button>`}</div></main>`)}
+function reqAcc(){const l=$('lb').value.trim();if(!l)return note('Digite seu nome.');T(()=>DB.doc('requests/'+ME.id).set({at:Date.now(),label:l}))}
+
+const V={
+graf:()=>{const g=gS,D=days(g.p),t0=D[0].getTime(),M=moves.filter(m=>m.ts>=t0&&(!g.i||m.item==g.i)&&(!g.c||m.collab==g.c)),out=M.filter(m=>m.type=='out'),inn=M.filter(m=>m.type=='in'),sum=a=>a.reduce((x,m)=>x+m.qty,0),idx={};D.forEach((d,i)=>idx[dk(d)]=i);
+ const ser=a=>{const v=D.map(()=>0);a.forEach(m=>{const i=idx[dk(new Date(m.ts))];if(i!=null)v[i]+=m.qty});return v};
+ const grp=(a,f,n)=>{const o={};a.forEach(m=>{const k=f(m);o[k]=o[k]||{l:n(m),v:0};o[k].v+=m.qty});return Object.values(o).sort((x,y)=>y.v-x.v).slice(0,12)};
+ let ch;const top=grp(out.filter(m=>m.collab),m=>m.collab,m=>m.cname)[0];
+ if(g.t=='dia')ch=svgCols(D,[{n:'Saídas',c:'var(--ac)',v:ser(out)}]);
+ else if(g.t=='es')ch=svgCols(D,[{n:'Entradas',c:'#2f9e6b',v:ser(inn)},{n:'Saídas',c:'var(--ac)',v:ser(out)}]);
+ else if(g.t=='col')ch=svgBars(grp(out.filter(m=>m.collab),m=>m.collab,m=>m.cname));
+ else if(g.t=='ins')ch=svgBars(grp(out,m=>m.item,m=>m.iname));
+ else{const s=stockOf();ch=svgBars(items.filter(i=>!g.i||i.id==g.i).map(i=>({l:i.name,v:Math.max(0,s[i.id]||0),c:(s[i.id]||0)<=(i.min||0)?'var(--bad)':'#2f9e6b'})))}
+ const sel=(k,o)=>`<select onchange="gS.${k}=this.value;draw(1)">${o.map(([v,l])=>`<option value="${v}" ${g[k]==v?'selected':''}>${e(l)}</option>`).join('')}</select>`;
+ return `<div class="c"><label>Gráfico</label>${sel('t',[['dia','Saídas por dia'],['es','Entradas x saídas por dia'],['col','Consumo por colaborador'],['ins','Consumo por insumo'],['est','Estoque atual (vermelho = abaixo do mínimo)']])}<label>Período</label>${sel('p',[['7','Últimos 7 dias'],['30','Últimos 30 dias'],['90','Últimos 90 dias'],['mes','Mês atual']])}<label>Insumo</label>${sel('i',[['','Todos'],...items.map(i=>[i.id,i.name])])}<label>Colaborador</label>${sel('c',[['','Todos'],...collabs.map(c=>[c.id,c.name])])}</div><div class="c r" style="align-items:flex-start"><div><div class="m">Saídas</div><b>${+sum(out).toFixed(1)}</b></div><div><div class="m">Entradas</div><b>${+sum(inn).toFixed(1)}</b></div><div><div class="m">Estoque baixo</div><b>${lowItems().length}</b></div><div><div class="m">Mais usa</div><b>${top?e(top.l):'—'}</b></div></div><div class="c">${ch}</div><p class="m">Insumos com unidades diferentes são somados. Para comparar a mesma unidade, filtre por insumo.</p>`},
+avisos:()=>{const P=pendReq(),W=can('est')?lowItems():[],s=stockOf(),u=unread();return (P.length?`<div class="c"><b>Pedidos de acesso (${P.length})</b>${P.map(r=>`<div class="r"><span>${e(r.label||'Usuário')}</span><button onclick="acc('${r.id}')">Liberar</button></div>`).join('')}</div>`:'')+(W.length?`<div class="c low"><b>Estoque baixo</b>${W.map(i=>`<div class="r"><span>${e(i.name)}</span><span class="w">${s[i.id]||0} ${e(i.unit||'')} (mín. ${i.min||0})</span></div>`).join('')}</div>`:'')+(u?`<div class="c"><b>${u} conversa(s) com mensagem nova</b><div class="b"><button onclick="tab='chat';draw(1);openChat(curChat)">Abrir chat</button></div></div>`:'')||'<p class="m">Nenhum aviso no momento.</p>'},
+chat:()=>{const L=convs(),c=L.find(x=>x.id==curChat)||L[0];return `<div class="c"><label>Conversa</label><select onchange="openChat(this.value)">${L.map(x=>`<option value="${x.id}" ${x.id==c.id?'selected':''}>${e(ttl(x))}${unreadOf(x)?' •':''}</option>`).join('')}</select><div class="b"><button onclick="newChat()">Nova conversa</button><button class="x" onclick="clearChat()">Apagar conversa</button></div></div><div class="c"><div style="max-height:50vh;overflow:auto;display:flex;flex-direction:column-reverse">${msgs.map(m=>`<div style="margin:6px 0;${m.by==ME.id?'text-align:right':''}"><div class="m">${e(nm(m.by))} · ${fmt(m.ts)}</div><div>${e(m.text)}</div>${m.by==ME.id||own?`<button class="x" style="padding:2px 8px;font-size:12px" onclick="delMsg('${m.id}')">apagar</button>`:''}</div>`).join('')||'<p class="m">Nenhuma mensagem.</p>'}</div></div><div class="c"><input id="cm" placeholder="Escreva uma mensagem" maxlength="500"><button onclick="sendMsg()">Enviar</button></div><p class="m">Aviso: a separação das conversas é feita pelo app. Quem tem conhecimento técnico e acesso ao app consegue ler conversas de outros. Não use para assuntos sigilosos.</p>`},
+
+estoque:()=>{const s=stockOf();return `<datalist id="un">${['unidade','litro','pacote','caixa','rolo','metro','kg','par','fardo','galão'].map(u=>`<option>${u}`).join('')}</datalist>`+(items.length?items.map(i=>{const q=s[i.id]||0,lo=q<=(i.min||0);return `<div class="c ${lo?'low':''}"><div class="r"><div><b>${e(i.name)}</b><div class="m">mínimo ${i.min||0} ${e(i.unit||'')}</div>${lo?'<div class="w">Estoque baixo</div>':''}</div><div class="n">${q} <span class="m">${e(i.unit||'')}</span></div></div><div class="b">${can('mov')?`<button onclick="mv('${i.id}','in')">Entrada</button><button onclick="mv('${i.id}','out')">Saída</button>`:''}${can('ins')?`<button onclick="edI('${i.id}')">Editar</button>`:''}${can('exc')?`<button class="x" onclick="delI('${i.id}')">Excluir</button>`:''}</div></div>`}).join(''):`<p class="m">Nenhum insumo cadastrado.</p>${can('ins')?'<button onclick="seed()">Cadastrar insumos iniciais</button>':''}`)+(can('ins')?`<div class="c"><b>Novo insumo</b><input id="ni" placeholder="Nome do insumo"><input id="nu" list="un" placeholder="Unidade (unidade, litro, pacote, caixa...)"><input id="nm" type="number" inputmode="decimal" placeholder="Quantidade mínima (aviso)"><button onclick="addI()">Adicionar insumo</button></div>`:'')},
+retirar:()=>collabs.length&&items.length?`<div class="c"><h3>Registrar retirada</h3><label>Colaborador</label><select id="rc">${optC(collabs)}</select><label>Insumo</label><select id="ri">${optI(items)}</select><label>Quantidade</label><input id="rq" type="number" min="0" step="any" value="1" inputmode="decimal"><button onclick="ret()">Registrar retirada</button></div><p class="m">Data e hora são registradas automaticamente.</p>`:'<p class="m">Nenhum colaborador ou insumo cadastrado. Peça ao administrador.</p>',
+hist:()=>moves.slice(0,100).map(m=>`<div class="c"><b>${m.type=='in'?'Entrada':'Saída'}: ${m.qty} ${e(m.unit||'')} × ${e(m.iname)}</b><div class="m">${fmt(m.ts)}${m.cname?' · '+e(m.cname):''} · por ${e(nm(m.by))}</div>${(m.edits||[]).length?`<div class="m">Corrigido ${m.edits.length}x. Original: ${e(m.edits[0].old)}</div>`:''}<div class="b">${can('cor')?`<button onclick="edM('${m.id}')">Corrigir</button>`:''}${can('exc')?`<button class="x" onclick="rmM('${m.id}')">Excluir</button>`:''}</div></div>`).join('')||'<p class="m">Nenhuma movimentação ainda.</p>',
+rank:()=>{const k=rkM||mo(Date.now()),g={};
+ collabs.forEach(c=>g[c.id]={n:c.name,u:0,p:packs[k+'_'+c.id]||0,id:c.id});
+ moves.filter(m=>m.type=='out'&&m.collab&&mo(m.ts)==k&&(!rkI||m.item==rkI)).forEach(m=>{const a=g[m.collab]=g[m.collab]||{n:m.cname,u:0,p:packs[k+'_'+m.collab]||0,id:m.collab};a.u+=m.qty});
+ const q=a=>a.p?a.u/a.p:-1,L=Object.values(g).sort((a,b)=>(rkS=='r'?q(b)-q(a):b.u-a.u)||a.n.localeCompare(b.n));
+ return `<div class="c"><label>Mês</label><input type="month" value="${k}" onchange="rkM=this.value;draw(1)"><label>Insumo</label><select onchange="rkI=this.value;draw(1)"><option value="">Todos os insumos</option>${items.map(i=>`<option value="${i.id}" ${rkI==i.id?'selected':''}>${e(i.name)}</option>`).join('')}</select><label>Ordenar por</label><select onchange="rkS=this.value;draw(1)"><option value="u">Total usado</option><option value="r" ${rkS=='r'?'selected':''}>Uso por pacote embalado</option></select></div>`+(L.map((a,i)=>`<div class="c ${i<4&&a.u>0?'top':''}"><div class="r"><span class="pos">${i+1}º</span><b>${e(a.n)}</b><div class="n">${a.u}</div></div><div class="m">${rkI?'uso do insumo escolhido':'itens usados'} no mês</div><label>Pacotes embalados (digite)</label><input type="number" min="0" inputmode="numeric" value="${a.p}" onchange="setP('${a.id}',this.value)"><div class="m">${a.p?(a.u/a.p).toFixed(1)+' por pacote':'Informe os pacotes para ver a média'}</div></div>`).join('')||'<p class="m">Cadastre colaboradores na aba Equipe.</p>')+'<p class="m">Os 4 que mais usam ficam em destaque.</p>'},
+equipe:()=>`<div class="c"><b>Colaboradores</b>${collabs.map(c=>`<div class="r"><span>${e(c.name)}</span><button class="x" onclick="rmC('${c.id}')">Remover</button></div>`).join('')}<input id="nc" placeholder="Nome do colaborador"><button onclick="addC()">Adicionar colaborador</button></div>`+(own?`${SH()}<div class="c r"><span class="m">Aceitar novos pedidos: <b>${cfg.allowSignups?'Sim':'Não'}</b></span><button onclick="tgl()">${cfg.allowSignups?'Desligar':'Ligar'}</button></div><div class="c"><b>Pedidos de acesso</b>${reqs.filter(r=>!roles[r.id]).map(r=>`<div class="r"><span>${e(r.label||'Usuário')}</span><button onclick="acc('${r.id}')">Liberar</button></div>`).join('')||'<p class="m">Nenhum pedido.</p>'}</div><div class="c"><b>Acessos</b>${Object.keys(roles).map(id=>`<div class="r" style="margin-top:8px"><div><b>${e(nm(id))}</b><div class="m">${{geral:'geral',parcial:'parcial',simples:'simples'}[roles[id].role]} · ${{active:'ativo',blocked:'bloqueado'}[roles[id].status]||'ativo'}</div></div><button onclick="acc('${id}')">Acesso</button></div>`).join('')||'<p class="m">Nenhum acesso liberado ainda.</p>'}</div>`:''),conta:()=>`<div class="c"><b>${e(ME.email||'')}</b><div class="m">${own?'Administrador (proprietário)':{geral:'Administrador geral',parcial:'Parcial',simples:'Simples'}[my().role]}</div></div><div class="c"><b>Trocar senha</b><input id="pa" type="password" placeholder="Senha atual" autocomplete="current-password"><input id="pn" type="password" placeholder="Nova senha (mínimo 6)" autocomplete="new-password"><button onclick="chPw()">Trocar senha</button></div>${SH()}<button class="x" onclick="outU()">Sair</button>`};
+
+/* ---------- ações ---------- */
+function cp(){const f=()=>{dlg(`<p>Copie o link:</p><input id="lk" readonly value="${e(LINK)}"><div class="b"><button onclick="dlg()">OK</button></div>`);$('lk').select()};try{navigator.clipboard.writeText(LINK).then(()=>note('Link copiado!'),f)}catch(_){f()}}
+function addMove(t,id,q,c){if(!(q>0))return note('Informe uma quantidade maior que zero.');const it=items.find(x=>x.id==id),cb=collabs.find(x=>x.id==c);return T(async()=>{const b=F.writeBatch(fdb);b.set(F.doc(F.collection(fdb,'moves')),{ts:Date.now(),type:t,item:id,iname:it.name,unit:it.unit||'',qty:q,collab:c||'',cname:cb?cb.name:'',by:ME.id,edits:[]});b.update(F.doc(fdb,'items',id),{stock:F.increment(t=='in'?q:-q)});await b.commit()})}
+function mv(id,t){ask((t=='in'?'Entrada de ':'Saída de ')+items.find(x=>x.id==id).name,[{id:'q',l:'Quantidade',t:'number'}],v=>addMove(t,id,+v.q,''))}
+function ret(){const q=+$('rq').value,id=$('ri').value,c=$('rc').value,it=items.find(x=>x.id==id),go=async()=>{await addMove('out',id,q,c);note('Retirada registrada.')};if(!(q>0))return note('Informe uma quantidade maior que zero.');q>(stockOf()[id]||0)?sure('A quantidade é maior que o estoque. Registrar mesmo assim?',go):go()}
+function addI(){const n=$('ni').value.trim();if(!n)return note('Digite o nome do insumo.');T(()=>DB.collection('items').add({name:n,unit:$('nu').value.trim()||'unidade',min:+$('nm').value||0,stock:0}))}
+function seed(){T(async()=>{for(const n of['Durex','Sacos de lixo','Envelopes de envio','Rolo de sulfilme preto','Rolo de sulfilme transparente','Rolo de papelão','Rolo de plástico bolha','Etiqueta zebra'])await DB.collection('items').add({name:n,unit:/^Rolo/.test(n)?'rolo':'unidade',min:2,stock:0})})}
+function edI(id){const i=items.find(x=>x.id==id);ask('Editar insumo',[{id:'n',l:'Nome',v:i.name},{id:'u',l:'Unidade (unidade, litro, pacote, caixa...)',v:i.unit||''},{id:'m',l:'Quantidade mínima',t:'number',v:i.min||0}],v=>T(()=>DB.doc('items/'+id).update({name:v.n.trim()||i.name,unit:v.u.trim(),min:+v.m||0})))}
+function delI(id){sure('Excluir este insumo? O histórico dele continua guardado.',()=>sens(()=>T(()=>DB.doc('items/'+id).delete())))}
+function edM(id){const m=moves.find(x=>x.id==id);ask('Corrigir movimentação',[{id:'q',l:'Quantidade',t:'number',v:m.qty},{id:'d',l:'Data e hora (dd/mm/aaaa hh:mm)',v:fmt(m.ts)}],v=>T(async()=>{const q=+v.q;if(!(q>0))return note('Informe uma quantidade maior que zero.');const r=/(\d+)\/(\d+)\/(\d+)\D+(\d+):(\d+)/.exec(v.d||'');let ts=m.ts;if(r)ts=new Date(+r[3],r[2]-1,+r[1],+r[4],+r[5]).getTime();const b=F.writeBatch(fdb);b.update(F.doc(fdb,'moves',id),{qty:q,ts,edits:[...(m.edits||[]),{ts:Date.now(),by:ME.id,old:m.qty+' em '+fmt(m.ts)}]});if(items.some(x=>x.id==m.item))b.update(F.doc(fdb,'items',m.item),{stock:F.increment((m.type=='in'?1:-1)*(q-m.qty))});await b.commit()}))}
+function rmM(id){sure('Excluir esta movimentação? O estoque será ajustado.',()=>sens(()=>T(async()=>{const m=moves.find(x=>x.id==id),b=F.writeBatch(fdb);b.set(F.doc(F.collection(fdb,'audit')),{ts:Date.now(),by:ME.id,m});b.delete(F.doc(fdb,'moves',id));if(items.some(x=>x.id==m.item))b.update(F.doc(fdb,'items',m.item),{stock:F.increment((m.type=='in'?-1:1)*m.qty)});await b.commit()})))}
+function addC(){const n=$('nc').value.trim();if(n)T(()=>DB.collection('collabs').add({name:n}))}
+function rmC(id){sure('Remover colaborador? O histórico dele continua guardado.',()=>T(()=>DB.doc('collabs/'+id).delete()))}
+function setP(id,v){T(()=>DB.doc('packs/'+(rkM||mo(Date.now()))+'_'+id).set({n:Math.max(0,+v||0)}))}
+function acc(id){const r=roles[id]||{role:'simples',perms:{},status:'active'},lb=(roles[id]&&roles[id].label)||(reqs.find(x=>x.id==id)||{}).label||'';
+ dlg(`<h3>${e(nm(id))}</h3><label>Nível</label><select id="ar"><option value="simples">Simples (só retirada)</option><option value="parcial">Parcial (você escolhe)</option><option value="geral">Geral (faz tudo, menos liberar acessos)</option></select><label>Permissões do nível Parcial</label>${PL.map(([k,l])=>`<label class="ck"><input type="checkbox" id="pk_${k}" ${(r.perms||{})[k]?'checked':''}> ${l}</label>`).join('')}<label>Situação</label><select id="as"><option value="active">Ativo</option><option value="blocked">Bloqueado</option></select><div class="b"><button id="ok">Salvar</button><button class="x" onclick="dlg()">Cancelar</button></div>`);
+ $('ar').value=r.role;$('as').value=r.status||'active';
+ $('ok').onclick=()=>{const role=$('ar').value,s=$('as').value,perms={};PL.forEach(([k])=>{if($('pk_'+k).checked)perms[k]=true});dlg();sens(()=>T(async()=>{await DB.doc('roles/'+id).set({role,perms,status:s,label:lb});await DB.doc('people/'+id).set({name:lb||'Usuário',status:s});await DB.doc('requests/'+id).delete().catch(()=>{})}))}}
+const gS={t:'dia',p:'30',i:'',c:''},dk=d=>d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();
+function days(p){const n=new Date();n.setHours(0,0,0,0);const a=p=='mes'?new Date(n.getFullYear(),n.getMonth(),1):new Date(n.getTime()-(+p-1)*864e5),r=[];for(let d=new Date(a);d<=n;d.setDate(d.getDate()+1))r.push(new Date(d));return r}
+function svgCols(D,S){const W=320,H=160,L=30,B=20,T0=8,mx=Math.max(1,...S.flatMap(s=>s.v)),n=D.length,bw=(W-L)/n,sw=bw/S.length,ph=H-B-T0;
+ let g=`<text x="0" y="${T0+8}" font-size="10" fill="currentColor">${+mx.toFixed(1)}</text><line x1="${L}" y1="${H-B}" x2="${W}" y2="${H-B}" stroke="currentColor" opacity=".3"/>`;
+ S.forEach((s,j)=>s.v.forEach((v,i)=>{const h=v/mx*ph;g+=`<rect x="${(L+i*bw+j*sw).toFixed(1)}" y="${(H-B-h).toFixed(1)}" width="${Math.max(1,sw-.6).toFixed(1)}" height="${h.toFixed(1)}" fill="${s.c}"/>`}));
+ const k=Math.ceil(n/6);D.forEach((d,i)=>{if(i%k==0)g+=`<text x="${(L+i*bw).toFixed(1)}" y="${H-5}" font-size="9" fill="currentColor">${d.getDate()}/${d.getMonth()+1}</text>`});
+ return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Gráfico">${g}</svg>${S.length>1?'<div class="m">'+S.map(s=>`<span style="color:${s.c}">■</span> ${s.n}`).join(' &nbsp; ')+'</div>':''}`}
+function svgBars(d){if(!d.length)return '<p class="m">Sem dados para este filtro.</p>';const mx=Math.max(1,...d.map(x=>x.v)),h=28;return `<svg viewBox="0 0 320 ${d.length*h+4}" width="100%" role="img" aria-label="Gráfico"><g font-size="11" fill="currentColor">${d.map((x,i)=>`<text x="0" y="${i*h+16}">${e(String(x.l).slice(0,17))}</text><rect x="112" y="${i*h+4}" width="${Math.max(2,x.v/mx*165).toFixed(1)}" height="16" rx="3" fill="${x.c||'var(--ac)'}"/><text x="${(116+x.v/mx*165).toFixed(1)}" y="${i*h+16}">${+x.v.toFixed(1)}</text>`).join('')}</g></svg>`}
+const convs=()=>[{id:'geral',kind:'all',last:geral.last},...chats.filter(c=>c.id!='geral'&&(c.members||[]).includes(ME.id)).sort((a,b)=>((b.last||{}).ts||0)-((a.last||{}).ts||0))];
+const ttl=c=>c.id=='geral'?'Todos (grupo geral)':c.kind=='dm'?nm((c.members||[]).find(x=>x!=ME.id)):(c.title||(c.members||[]).filter(x=>x!=ME.id).map(nm).join(', ')),unreadOf=c=>!!c.last&&c.last.ts>(seenMap[c.id]||0)&&c.last.by!=ME.id,unread=()=>convs().filter(unreadOf).length;
+const lowItems=()=>{const s=stockOf();return items.filter(i=>(s[i.id]||0)<=(i.min||0))},pendReq=()=>own?reqs.filter(r=>!roles[r.id]):[];
+const bd=k=>{const n=k=='chat'?unread():k=='avisos'?pendReq().length+(can('est')?lowItems().length:0)+unread():0;return n?` (${n})`:''};
+function openChat(cid){curChat=cid;msgUn&&msgUn();msgs=[];msgUn=DB.collection('chats/'+cid+'/msgs').orderBy('ts','desc').limit(100).onSnapshot(s=>{msgs=arr(s);markSeen();draw()},()=>{});draw(1)}
+function markSeen(){const c=convs().find(x=>x.id==curChat);if(tab!='chat'||!c||!c.last||c.last.ts<=(seenMap[c.id]||0)||sw)return;sw=1;seenMap={...seenMap,[c.id]:c.last.ts};SD.set({seen:seenMap}).catch(()=>{}).then(()=>{sw=0})}
+function sendMsg(){const t=$('cm').value.trim();if(!t)return;const ts=Date.now(),c=curChat;T(async()=>{await DB.collection('chats/'+c+'/msgs').add({ts,by:ME.id,text:t.slice(0,500)});const last={ts,by:ME.id};if(c=='geral')await DB.doc('chats/geral').set({kind:'all',last});else await DB.doc('chats/'+c).update({last});$('cm').value=''})}
+function delMsg(id){T(()=>DB.doc('chats/'+curChat+'/msgs/'+id).delete())}
+function clearChat(){const c=curChat;if(c=='geral'&&!own)return note('Só o administrador apaga o grupo geral.');sure(c=='geral'?'Apagar todas as mensagens do grupo geral para todos?':'Apagar esta conversa para todos os participantes?',()=>T(async()=>{const q=await DB.collection('chats/'+c+'/msgs').get();for(const d of q.docs)await DB.doc('chats/'+c+'/msgs/'+d.id).delete();if(c!='geral'){await DB.doc('chats/'+c).delete();openChat('geral')}}))}
+function newChat(){const ids=Object.keys(people).filter(id=>people[id].status=='active'&&id!=ME.id);
+ if(!ids.length)return note('Ainda não há outras pessoas liberadas.');
+ dlg(`<h3>Nova conversa</h3><p class="m">Escolha uma pessoa (conversa privada) ou várias (grupo).</p>${ids.map(id=>`<label class="ck"><input type="checkbox" class="nc" value="${id}"> ${e(nm(id))}</label>`).join('')}<label>Nome do grupo (opcional)</label><input id="gt" placeholder="Ex.: Embalagem"><div class="b"><button id="ok">Criar</button><button onclick="dlg();openChat('geral')">Grupo geral (todos)</button><button class="x" onclick="dlg()">Cancelar</button></div>`);
+ $('ok').onclick=()=>{const sel=[...document.querySelectorAll('.nc')].filter(x=>x.checked).map(x=>x.value),gt=$('gt').value.trim();if(!sel.length)return note('Escolha ao menos uma pessoa.');const mem=[ME.id,...sel].sort(),dm=mem.length==2,id=dm?'dm_'+mem.join('_'):'g_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);dlg();T(async()=>{if(!chats.find(c=>c.id==id))await DB.doc('chats/'+id).set(dm?{kind:'dm',members:mem,by:ME.id}:{kind:'group',members:mem,title:gt,by:ME.id});openChat(id)})}}
+function SH(){const t='Acesse o Controle de Insumos: '+LINK+' (crie sua conta com e-mail e senha, confirme o e-mail e toque em Pedir liberação)';return `<div class="c"><b>Convidar pessoas</b><p class="m">Envie este link. A pessoa cria a conta, confirma o e-mail e pede liberação; você aprova em Equipe, Pedidos de acesso.</p><div class="b"><a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t)}">Enviar pelo WhatsApp</a><button onclick="cp()">Copiar link</button></div></div>`}
+init();
+</script></body></html>
