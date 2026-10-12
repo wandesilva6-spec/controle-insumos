@@ -8,6 +8,7 @@
 html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;background:var(--hd);color:#fff;font-size:14px}
+.lg{height:30px;max-width:110px;object-fit:contain;vertical-align:middle;margin-right:8px;border-radius:6px}.lgb{display:block;max-height:90px;max-width:70%;object-fit:contain;margin:0 auto 10px}
 nav{display:flex;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--bd)}
 nav button{flex:1;background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:12px 10px;color:var(--mu);white-space:nowrap}
 nav .on{color:var(--tx);border-bottom-color:var(--ac)}
@@ -29,6 +30,9 @@ label{font-size:13px;color:var(--mu)}h2,h3{margin:0 0 8px}
 </style></head><body><div id="app"><main><p class="m">Carregando...</p></main></div><div id="md"></div>
 <script>
 const LINK=location.href.split('#')[0].split('?')[0];
+let LOGO='';try{LOGO=localStorage.getItem('lg')||''}catch(_){}
+const lg=c=>LOGO?`<img class="${c||'lg'}" src="${e(LOGO)}" alt="Logo">`:'';
+function applyLogo(v){v=typeof v=='string'?v:'';if(v==LOGO)return false;LOGO=v;try{v?localStorage.setItem('lg',v):localStorage.removeItem('lg')}catch(_){}return true}
 let DB,USR,ME={},own=false,canW=null,ready=false,rl=false,items=[],collabs=[],moves=[],packs={},roles={},reqs=[],names={},tab='estoque',rkM='',rkS='u',rkI='',tk=0,st={},chats=[],msgs=[],seenMap={},SD=null,sw=0,curChat='geral',msgUn=null,OWN='';
 const $=i=>document.getElementById(i),e=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=t=>new Date(t).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});
@@ -58,16 +62,17 @@ function mkDB(){const mkD=r=>({set:d=>F.setDoc(r,d),update:d=>F.updateDoc(r,d),d
  DB={collection:p=>mkQ(F.collection(fdb,...p.split('/')),[]),doc:p=>mkD(F.doc(fdb,...p.split('/')))}}
 async function init(){
  try{const B='https://www.gstatic.com/firebasejs/10.14.1/',[a,u,s]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-auth.js'),import(B+'firebase-firestore.js')]);F={...a,...u,...s};const ap=F.initializeApp(CFG);auth=F.getAuth(ap);fdb=F.getFirestore(ap);mkDB()}
- catch(x){return R('<main><div class="c"><h2>Não foi possível carregar</h2><p>Confira a internet e a configuração do Firebase.</p></div></main>')}
+ catch(x){console.error(x);const m=String((x&&x.message)||x||'').replace(/[<>&]/g,'');return R('<main><div class="c"><h2>Não foi possível carregar</h2><p>Confira a internet e a configuração do Firebase.</p><p style="font-size:12px;opacity:.7;word-break:break-all">Detalhe técnico: '+m+'</p></div></main>')}
  F.onAuthStateChanged(auth,onUser)}
 async function onUser(u){un.forEach(f=>f());un=[];msgUn&&msgUn();msgUn=null;ready=false;started=false;rl=false;ME={};own=false;roles={};reqs=[];dlg();
  if(!u)return authView();
- try{await u.reload()}catch(_){}
+ try{await u.reload();if(u.emailVerified)await u.getIdToken(true)}catch(_){}
  if(!u.emailVerified)return verView();
  own=u.email.toLowerCase()==ADMIN.toLowerCase();ME={id:u.uid,name:own?'Administrador':(pendName||u.email),email:u.email,isOwner:own};
  try{
   if(own){const c=DB.doc('config/app');if(!(await c.get()).exists())await c.set({allowSignups:true});await DB.doc('people/'+ME.id).set({name:'Administrador',status:'active',owner:true});rl=true;started=true;ready=true;startData();return draw(1)}
   un.push(DB.doc('roles/'+ME.id).onSnapshot(s=>{roles=s.exists()?{[ME.id]:s.data()}:{};rl=true;gate()},x=>{rl=true;gate()}));
+  un.push(DB.doc('config/app').onSnapshot(s=>{if(applyLogo((s.data()||{}).logo))gate()},x=>{}));
   un.push(DB.doc('requests/'+ME.id).onSnapshot(s=>{reqs=s.exists()?[{id:ME.id,label:s.data().label||''}]:[];gate()},x=>{}))
  }catch(x){note('Falha ao carregar ('+(x.code||x.message)+'). Confira a configuração e as regras.')}}
 function gate(){if(!rl)return;ready=true;const r=my();
@@ -77,7 +82,7 @@ function gate(){if(!rl)return;ready=true;const r=my();
 function startData(){const sub=(ref,fn)=>un.push(ref.onSnapshot(s=>{fn(s);draw()},x=>{ERRSUB=x.code;draw()}));
  sub(DB.collection('items'),s=>{items=arr(s).sort((a,b)=>a.name.localeCompare(b.name))});
  sub(DB.collection('collabs'),s=>{collabs=arr(s).sort((a,b)=>a.name.localeCompare(b.name))});
- sub(DB.doc('config/app'),s=>{cfg=s.data()||{}});
+ sub(DB.doc('config/app'),s=>{cfg=s.data()||{};applyLogo(cfg.logo)});
  sub(DB.collection('people'),s=>{people={};s.docs.forEach(d=>people[d.id]=d.data());OWN=(Object.entries(people).find(([k,v])=>v.owner)||[''])[0]});
  if(own){sub(DB.collection('roles'),s=>{roles={};s.docs.forEach(d=>roles[d.id]=d.data())});sub(DB.collection('requests'),s=>{reqs=s.docs.map(d=>({id:d.id,label:d.data().label||''}))})}
  if(can('his')||can('ran')){const t=new Date(),since=new Date(t.getFullYear(),t.getMonth()-3,1).getTime();sub(DB.collection('moves').where('ts','>=',since),s=>{moves=arr(s).sort((a,b)=>b.ts-a.ts)})}
@@ -87,7 +92,7 @@ function startData(){const sub=(ref,fn)=>un.push(ref.onSnapshot(s=>{fn(s);draw()
  sub(DB.doc('chats/geral'),s=>{geral=s.data()||{}});
  tab=TABS.find(t=>t[2]())[0]}
 const sens=cb=>ask('Confirme sua senha',[{id:'p',l:'Senha',t:'password'}],v=>T(async()=>{await F.reauthenticateWithCredential(auth.currentUser,F.EmailAuthProvider.credential(auth.currentUser.email,v.p));cb()}));
-function authView(m){m=m||'in';const i=m=='in';R(`<main><div class="c"><h2>${i?'Entrar':'Criar conta'}</h2>${i?'':'<input id="an" placeholder="Seu nome">'}<input id="ae" type="email" placeholder="E-mail" autocomplete="username"><input id="ap" type="password" placeholder="Senha (mínimo 6)" autocomplete="${i?'current-password':'new-password'}"><button onclick="${i?'login()':'signup()'}">${i?'Entrar':'Criar conta'}</button><div class="b"><button class="x" onclick="authView('${i?'up':'in'}')">${i?'Criar conta':'Já tenho conta'}</button>${i?'<button class="x" onclick="resetPw()">Esqueci minha senha</button>':''}</div></div></main>`)}
+function authView(m){m=m||'in';const i=m=='in';R(`<main><div class="c">${lg('lgb')}<h2>${i?'Entrar':'Criar conta'}</h2>${i?'':'<input id="an" placeholder="Seu nome">'}<input id="ae" type="email" placeholder="E-mail" autocomplete="username"><input id="ap" type="password" placeholder="Senha (mínimo 6)" autocomplete="${i?'current-password':'new-password'}"><button onclick="${i?'login()':'signup()'}">${i?'Entrar':'Criar conta'}</button><div class="b"><button class="x" onclick="authView('${i?'up':'in'}')">${i?'Criar conta':'Já tenho conta'}</button>${i?'<button class="x" onclick="resetPw()">Esqueci minha senha</button>':''}</div></div></main>`)}
 const verView=()=>R(`<main><div class="c"><h2>Confirme seu e-mail</h2><p>Enviamos um link para <b>${e(ME.email||auth.currentUser.email)}</b>. Abra o e-mail, toque no link e volte aqui.</p><div class="b"><button onclick="verOk()">Já confirmei</button><button class="x" onclick="resendV()">Reenviar e-mail</button><button class="x" onclick="outU()">Sair</button></div></div></main>`);
 function login(){T(()=>F.signInWithEmailAndPassword(auth,$('ae').value.trim(),$('ap').value))}
 function signup(){T(async()=>{pendName=$('an').value.trim();if(!pendName)return note('Digite seu nome.');const c=await F.createUserWithEmailAndPassword(auth,$('ae').value.trim(),$('ap').value);await F.sendEmailVerification(c.user)})}
@@ -105,9 +110,15 @@ async function draw(f){if(!ready)return;if(!f&&/^(INPUT|SELECT)$/.test(document.
  if(!rl)return R('<main><p class="m">Carregando...</p></main>');
  if(!own&&(!my()||my().status!='active'))return pend();
  const t=TABS.filter(x=>x[2]());if(!t.find(x=>x[0]==tab))tab=t[0][0];
- R(`<header><b>Controle de Insumos</b><span>${e(ME.name||'')}${own?' · admin':''}</span></header><nav>${t.map(x=>`<button class="${x[0]==tab?'on':''}" onclick="tab='${x[0]}';draw(1);if(tab=='chat')openChat(curChat)">${x[1]}${bd(x[0])}</button>`).join('')}</nav><main>${ERRSUB?'<p class="w">Houve um problema ao carregar parte dos dados.</p>':''}${V[tab]()}</main>`)}
+ R(`<header><b>${lg()}Controle de Insumos</b><span>${e(ME.name||'')}${own?' · admin':''}</span></header><nav>${t.map(x=>`<button class="${x[0]==tab?'on':''}" onclick="tab='${x[0]}';draw(1);if(tab=='chat')openChat(curChat)">${x[1]}${bd(x[0])}</button>`).join('')}</nav><main>${ERRSUB?'<p class="w">Houve um problema ao carregar parte dos dados.</p>':''}${V[tab]()}</main>`)}
 function pend(){const mine=reqs.find(r=>r.id==ME.id);
- R(`<main><div class="c"><h2>${my()&&my().status=='blocked'?'Acesso bloqueado':'Aguardando liberação'}</h2>${my()?'<p>Fale com o administrador.</p>':mine?'<p>Pedido enviado. Assim que o administrador liberar, o app abre sozinho.</p>':`<p>Informe seu nome e peça a liberação ao administrador.</p><input id="lb" placeholder="Seu nome" value="${e(ME.name||'')}"><button onclick="reqAcc()">Pedir liberação</button>`}</div></main>`)}
+ R(`<main><div class="c">${lg('lgb')}<h2>${my()&&my().status=='blocked'?'Acesso bloqueado':'Aguardando liberação'}</h2>${my()?'<p>Fale com o administrador.</p>':mine?'<p>Pedido enviado. Assim que o administrador liberar, o app abre sozinho.</p>':`<p>Informe seu nome e peça a liberação ao administrador.</p><input id="lb" placeholder="Seu nome" value="${e(ME.name||'')}"><button onclick="reqAcc()">Pedir liberação</button>`}<button class="x" style="margin-top:12px" onclick="outU()">Sair da conta</button></div></main>`)}
+function LGC(){return `<div class="c"><b>Logo da empresa</b><div style="text-align:center;margin:10px 0">${LOGO?lg('lgb'):'<p class="m">Nenhuma logo cadastrada.</p>'}</div><input id="lf" type="file" accept="image/*" style="display:none" onchange="pickLogo(this)"><div class="b"><button onclick="$('lf').click()">${LOGO?'Alterar logo':'Adicionar logo'}</button>${LOGO?'<button class="x" onclick="rmLogo()">Remover logo</button>':''}</div></div>`}
+function pickLogo(inp){const f=inp.files&&inp.files[0];inp.value='';if(!f)return;if(!/^image\//.test(f.type))return note('Escolha um arquivo de imagem.');
+ const img=new Image,u=URL.createObjectURL(f);
+ img.onload=()=>{URL.revokeObjectURL(u);const k=Math.min(1,320/Math.max(img.width,img.height)),w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k)),c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');g.drawImage(img,0,0,w,h);let d=c.toDataURL('image/png');if(d.length>350000){g.globalCompositeOperation='destination-over';g.fillStyle='#fff';g.fillRect(0,0,w,h);d=c.toDataURL('image/jpeg',.85)}if(d.length>700000)return note('Imagem muito pesada. Escolha outra.');T(()=>DB.doc('config/app').update({logo:d}))};
+ img.onerror=()=>{URL.revokeObjectURL(u);note('Não foi possível abrir essa imagem.')};img.src=u}
+function rmLogo(){sure('Remover a logo?',()=>T(()=>DB.doc('config/app').update({logo:''})))}
 function reqAcc(){const l=$('lb').value.trim();if(!l)return note('Digite seu nome.');T(()=>DB.doc('requests/'+ME.id).set({at:Date.now(),label:l}))}
 
 const V={
@@ -133,7 +144,7 @@ rank:()=>{const k=rkM||mo(Date.now()),g={};
  moves.filter(m=>m.type=='out'&&m.collab&&mo(m.ts)==k&&(!rkI||m.item==rkI)).forEach(m=>{const a=g[m.collab]=g[m.collab]||{n:m.cname,u:0,p:packs[k+'_'+m.collab]||0,id:m.collab};a.u+=m.qty});
  const q=a=>a.p?a.u/a.p:-1,L=Object.values(g).sort((a,b)=>(rkS=='r'?q(b)-q(a):b.u-a.u)||a.n.localeCompare(b.n));
  return `<div class="c"><label>Mês</label><input type="month" value="${k}" onchange="rkM=this.value;draw(1)"><label>Insumo</label><select onchange="rkI=this.value;draw(1)"><option value="">Todos os insumos</option>${items.map(i=>`<option value="${i.id}" ${rkI==i.id?'selected':''}>${e(i.name)}</option>`).join('')}</select><label>Ordenar por</label><select onchange="rkS=this.value;draw(1)"><option value="u">Total usado</option><option value="r" ${rkS=='r'?'selected':''}>Uso por pacote embalado</option></select></div>`+(L.map((a,i)=>`<div class="c ${i<4&&a.u>0?'top':''}"><div class="r"><span class="pos">${i+1}º</span><b>${e(a.n)}</b><div class="n">${a.u}</div></div><div class="m">${rkI?'uso do insumo escolhido':'itens usados'} no mês</div><label>Pacotes embalados (digite)</label><input type="number" min="0" inputmode="numeric" value="${a.p}" onchange="setP('${a.id}',this.value)"><div class="m">${a.p?(a.u/a.p).toFixed(1)+' por pacote':'Informe os pacotes para ver a média'}</div></div>`).join('')||'<p class="m">Cadastre colaboradores na aba Equipe.</p>')+'<p class="m">Os 4 que mais usam ficam em destaque.</p>'},
-equipe:()=>`<div class="c"><b>Colaboradores</b>${collabs.map(c=>`<div class="r"><span>${e(c.name)}</span><button class="x" onclick="rmC('${c.id}')">Remover</button></div>`).join('')}<input id="nc" placeholder="Nome do colaborador"><button onclick="addC()">Adicionar colaborador</button></div>`+(own?`${SH()}<div class="c r"><span class="m">Aceitar novos pedidos: <b>${cfg.allowSignups?'Sim':'Não'}</b></span><button onclick="tgl()">${cfg.allowSignups?'Desligar':'Ligar'}</button></div><div class="c"><b>Pedidos de acesso</b>${reqs.filter(r=>!roles[r.id]).map(r=>`<div class="r"><span>${e(r.label||'Usuário')}</span><button onclick="acc('${r.id}')">Liberar</button></div>`).join('')||'<p class="m">Nenhum pedido.</p>'}</div><div class="c"><b>Acessos</b>${Object.keys(roles).map(id=>`<div class="r" style="margin-top:8px"><div><b>${e(nm(id))}</b><div class="m">${{geral:'geral',parcial:'parcial',simples:'simples'}[roles[id].role]} · ${{active:'ativo',blocked:'bloqueado'}[roles[id].status]||'ativo'}</div></div><button onclick="acc('${id}')">Acesso</button></div>`).join('')||'<p class="m">Nenhum acesso liberado ainda.</p>'}</div>`:''),conta:()=>`<div class="c"><b>${e(ME.email||'')}</b><div class="m">${own?'Administrador (proprietário)':{geral:'Administrador geral',parcial:'Parcial',simples:'Simples'}[my().role]}</div></div><div class="c"><b>Trocar senha</b><input id="pa" type="password" placeholder="Senha atual" autocomplete="current-password"><input id="pn" type="password" placeholder="Nova senha (mínimo 6)" autocomplete="new-password"><button onclick="chPw()">Trocar senha</button></div>${SH()}<button class="x" onclick="outU()">Sair</button>`};
+equipe:()=>`<div class="c"><b>Colaboradores</b>${collabs.map(c=>`<div class="r"><span>${e(c.name)}</span><button class="x" onclick="rmC('${c.id}')">Remover</button></div>`).join('')}<input id="nc" placeholder="Nome do colaborador"><button onclick="addC()">Adicionar colaborador</button></div>`+(own?`${LGC()}${SH()}<div class="c r"><span class="m">Aceitar novos pedidos: <b>${cfg.allowSignups?'Sim':'Não'}</b></span><button onclick="tgl()">${cfg.allowSignups?'Desligar':'Ligar'}</button></div><div class="c"><b>Pedidos de acesso</b>${reqs.filter(r=>!roles[r.id]).map(r=>`<div class="r"><span>${e(r.label||'Usuário')}</span><button onclick="acc('${r.id}')">Liberar</button></div>`).join('')||'<p class="m">Nenhum pedido.</p>'}</div><div class="c"><b>Acessos</b>${Object.keys(roles).map(id=>`<div class="r" style="margin-top:8px"><div><b>${e(nm(id))}</b><div class="m">${{geral:'geral',parcial:'parcial',simples:'simples'}[roles[id].role]} · ${{active:'ativo',blocked:'bloqueado'}[roles[id].status]||'ativo'}</div></div><button onclick="acc('${id}')">Acesso</button></div>`).join('')||'<p class="m">Nenhum acesso liberado ainda.</p>'}</div>`:''),conta:()=>`<div class="c"><b>${e(ME.email||'')}</b><div class="m">${own?'Administrador (proprietário)':{geral:'Administrador geral',parcial:'Parcial',simples:'Simples'}[my().role]}</div></div><div class="c"><b>Trocar senha</b><input id="pa" type="password" placeholder="Senha atual" autocomplete="current-password"><input id="pn" type="password" placeholder="Nova senha (mínimo 6)" autocomplete="new-password"><button onclick="chPw()">Trocar senha</button></div>${SH()}<button class="x" onclick="outU()">Sair</button>`};
 
 /* ---------- ações ---------- */
 function cp(){const f=()=>{dlg(`<p>Copie o link:</p><input id="lk" readonly value="${e(LINK)}"><div class="b"><button onclick="dlg()">OK</button></div>`);$('lk').select()};try{navigator.clipboard.writeText(LINK).then(()=>note('Link copiado!'),f)}catch(_){f()}}
